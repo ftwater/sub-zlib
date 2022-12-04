@@ -20,7 +20,7 @@ public interface IBookService extends IService<Book> {
 
     void deleteBook(String baseDir, Book book, Map<String, OptimizCountModel> optimizedZlibraryIds) throws IOException;
 
-    List<OptimizCountModel> getOptimizCountModel();
+    List<OptimizCountModel> getOptimizeCountModel();
 
-    void saveBookOptimizLog(List<Integer> zlibraryIds);
+    void saveBookOptimizeLog(List<Integer> zlibraryIds);
 }

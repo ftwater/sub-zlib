@@ -2,13 +2,14 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaoyanpeng.subzlib.mapper.BookMapper">
 
-    <resultMap id="optimizCountModel" type="com.zhaoyanpeng.subzlib.model.OptimizCountModel">
+    <resultMap id="optimizeCountModel" type="com.zhaoyanpeng.subzlib.model.OptimizCountModel">
         <result property="language" column="language"/>
         <result property="languageCount" column="languageCount" javaType="Long"/>
         <result property="processedCount" column="processedCount" javaType="java.util.concurrent.atomic.AtomicLong"
-        typeHandler="com.zhaoyanpeng.subzlib.mapper.typehandler.AtomicLongTypeHandler"/>
+                typeHandler="com.zhaoyanpeng.subzlib.mapper.typehandler.AtomicLongTypeHandler"/>
     </resultMap>
-    <insert id="batchInsertBookOptimizLog">
+
+    <insert id="batchInsertBookOptimizeLog">
         insert into book_optimize_log(zlibrary_id, delete_flag) values
         <foreach collection="zlibraryIds" item="zlibraryId" separator=",">
             (#{zlibraryId}, 1)
@@ -16,9 +17,11 @@
 
     </insert>
 
-    <select id="getOptimizCountModels" resultMap="optimizCountModel">
+    <select id="getOptimizeCountModels" resultMap="optimizeCountModel">
         select count(1) as languageCount, language, 0 as processedCount
-        from books
+        from (select t1.*
+              from books t1
+              where not exists(select * from book_optimize_log t2 where t1.zlibrary_id = t2.zlibrary_id)) as nb
         group by language
     </select>
 </mapper>

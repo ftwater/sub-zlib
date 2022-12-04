@@ -1,4 +1,4 @@
-package com.zhaoyanpeng.subzlib.manager;
+package com.zhaoyanpeng.subzlib.optimize;
 
 import com.zhaoyanpeng.subzlib.entity.Book;
 import com.zhaoyanpeng.subzlib.mapper.BookMapper;
@@ -21,14 +21,14 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Component
 @Slf4j
-public class BookOptimezer {
+public class BookOptimizer {
 
     private final IBookService bookService;
 
     private final BookMapper bookMapper;
 
 
-    public BookOptimezer(IBookService bookService, BookMapper bookMapper) {
+    public BookOptimizer(IBookService bookService, BookMapper bookMapper) {
         this.bookService = bookService;
         this.bookMapper = bookMapper;
     }

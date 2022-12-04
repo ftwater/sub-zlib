@@ -1,4 +1,4 @@
-package com.zhaoyanpeng.subzlib.strategy;
+package com.zhaoyanpeng.subzlib.optimize;
 
 import com.zhaoyanpeng.subzlib.entity.Book;
 

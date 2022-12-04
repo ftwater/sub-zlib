@@ -1,10 +1,9 @@
-package com.zhaoyanpeng.subzlib.conf.task;
+package com.zhaoyanpeng.subzlib.optimize;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.zhaoyanpeng.subzlib.context.GlobalContext;
+import com.zhaoyanpeng.subzlib.conf.GlobalContext;
 import com.zhaoyanpeng.subzlib.entity.Book;
 import com.zhaoyanpeng.subzlib.exception.SubZlibError;
-import com.zhaoyanpeng.subzlib.manager.BookOptimezer;
 import com.zhaoyanpeng.subzlib.model.OptimizCountModel;
 import com.zhaoyanpeng.subzlib.service.IBookService;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +30,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class BookOptimizeScheduler implements ApplicationRunner {
 
-    private final BookOptimezer bookOptimezer;
+    private final BookOptimizer bookOptimizer;
 
     private final IBookService bookService;
 
@@ -47,8 +46,8 @@ public class BookOptimizeScheduler implements ApplicationRunner {
     private static final long TEN_SECONDS = 1000L * 10;
 
 
-    public BookOptimizeScheduler(BookOptimezer bookOptimezer, IBookService bookService) {
-        this.bookOptimezer = bookOptimezer;
+    public BookOptimizeScheduler(BookOptimizer bookOptimizer, IBookService bookService) {
+        this.bookOptimizer = bookOptimizer;
         this.bookService = bookService;
         baseDir = new File(GlobalContext.getInstance().getBasePath());
         if (!baseDir.exists()) {
@@ -79,7 +78,7 @@ public class BookOptimizeScheduler implements ApplicationRunner {
             return;
         }
         optimizing = true;
-        List<OptimizCountModel> countModels = bookService.getOptimizCountModel();
+        List<OptimizCountModel> countModels = bookService.getOptimizeCountModel();
         countModels.forEach(optimizCountModel -> optimizMap.put(optimizCountModel.getLanguage(), optimizCountModel));
         startMonitor();
         Set<String> languages =
@@ -88,7 +87,7 @@ public class BookOptimizeScheduler implements ApplicationRunner {
         CountDownLatch countDownLatch = new CountDownLatch(languages.size());
         for (String language : languages) {
             try {
-                bookOptimezer.optimizeBookByLanguage(countDownLatch, optimizMap, baseDir.getCanonicalPath(), language);
+                bookOptimizer.optimizeBookByLanguage(countDownLatch, optimizMap, baseDir.getCanonicalPath(), language);
             } catch (IOException e) {
                 log.error("language={}，删除书籍异常", language);
             }
@@ -111,7 +110,7 @@ public class BookOptimizeScheduler implements ApplicationRunner {
                             long waitToProcesseCount =
                                     optimizCountModel.getLanguageCount() - optimizCountModel.getProcessedCount().get();
                             if (waitToProcesseCount > 0) {
-                                log.info("{}已处理{},还有{}待处理", language,
+                                log.trace("{}已处理{},还有{}待处理", language,
                                         optimizCountModel.getProcessedCount(),
                                         waitToProcesseCount
                                 );
@@ -130,10 +129,14 @@ public class BookOptimizeScheduler implements ApplicationRunner {
                         percent.floatValue() * 100);
                 // 保存优化记录，优化结束 或者 每500条记录保存一次
                 optimizMap.values().forEach(optimizCountModel -> {
+                    if (optimizCountModel.isOptimizeFinished() &&
+                            optimizCountModel.getOptimizedZlibraryIds().isEmpty()) {
+                        return;
+                    }
                     if (optimizCountModel.isOptimizeFinished() ||
                             optimizCountModel.getOptimizedZlibraryIds().size() >= 500) {
                         List<Integer> zlibraryIdsForSave = optimizCountModel.clearOptimizedZlibraryIdsForSave();
-                        bookService.saveBookOptimizLog(zlibraryIdsForSave);
+                        bookService.saveBookOptimizeLog(zlibraryIdsForSave);
                     }
                 });
             }

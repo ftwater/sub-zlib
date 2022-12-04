@@ -10,7 +10,9 @@ logging:
 
 sub-zlib:
   basePath: /Users/zhaoyanpeng/workspace/sub-zlib/zlib
+  remainLanguages:
+    - chinese
   deleteJudges:
-    - com.zhaoyanpeng.subzlib.strategy.RemainBookByLanguageStrategy
+    - com.zhaoyanpeng.subzlib.optimize.RemainBookByLanguageStrategy
 server:
   shutdown: graceful

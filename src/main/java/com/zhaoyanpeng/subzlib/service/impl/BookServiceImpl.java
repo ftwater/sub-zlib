@@ -1,18 +1,18 @@
 package com.zhaoyanpeng.subzlib.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zhaoyanpeng.subzlib.context.GlobalContext;
+import com.zhaoyanpeng.subzlib.conf.GlobalContext;
 import com.zhaoyanpeng.subzlib.entity.Book;
 import com.zhaoyanpeng.subzlib.exception.DeleteBookFailException;
-import com.zhaoyanpeng.subzlib.exception.InitDeleteJuageError;
-import com.zhaoyanpeng.subzlib.exception.NoDeleteJuageFoundException;
+import com.zhaoyanpeng.subzlib.exception.DeleteJudgeException;
 import com.zhaoyanpeng.subzlib.mapper.BookMapper;
 import com.zhaoyanpeng.subzlib.model.OptimizCountModel;
 import com.zhaoyanpeng.subzlib.service.IBookService;
-import com.zhaoyanpeng.subzlib.strategy.IShouldBookNeedToBeDelete;
+import com.zhaoyanpeng.subzlib.optimize.IShouldBookNeedToBeDelete;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
@@ -51,12 +51,12 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements IB
                 deleteJudges.add(deleteJudge);
             } catch (Exception e) {
                 log.error("实例化deleteJudege实现失败", e);
-                throw new InitDeleteJuageError("实例化deleteJudege实现失败:" + deleteJudgeName);
+                throw new DeleteJudgeException("实例化deleteJudege实现失败:" + deleteJudgeName);
             }
 
         }
         if (deleteJudges.isEmpty()) {
-            throw new NoDeleteJuageFoundException("请配置sub-zlib.deleteJudges配置项目");
+            throw new DeleteJudgeException("请配置sub-zlib.deleteJudges配置项目");
         }
     }
 
@@ -87,13 +87,16 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements IB
     }
 
     @Override
-    public List<OptimizCountModel> getOptimizCountModel() {
-        return bookMapper.getOptimizCountModels();
+    public List<OptimizCountModel> getOptimizeCountModel() {
+        return bookMapper.getOptimizeCountModels();
     }
 
     @Override
-    public void saveBookOptimizLog(List<Integer> zlibraryIds) {
-        bookMapper.batchInsertBookOptimizLog(zlibraryIds);
+    public void saveBookOptimizeLog(List<Integer> zlibraryIds) {
+        if (CollectionUtils.isEmpty(zlibraryIds)) {
+            return;
+        }
+        bookMapper.batchInsertBookOptimizeLog(zlibraryIds);
     }
 
 

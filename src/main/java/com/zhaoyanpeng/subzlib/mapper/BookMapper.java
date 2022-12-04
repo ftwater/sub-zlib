@@ -20,17 +20,18 @@ import java.util.List;
 @Mapper
 public interface BookMapper extends BaseMapper<Book> {
 
-    @Select("select * from books where language = #{language}")
+    @Select("select * from books t1 where language = #{language} and not exists(select * from book_optimize_log t2 " +
+            "where t1.zlibrary_id = t2.zlibrary_id)")
     @Options(resultSetType = ResultSetType.FORWARD_ONLY, fetchSize = 1000)
     @ResultType(Book.class)
     void listBookByLanguage(@Param("language") String language, ResultHandler<Book> resultHandler);
 
-    List<OptimizCountModel> getOptimizCountModels();
+    List<OptimizCountModel> getOptimizeCountModels();
 
     /**
      * 插入优化日志
      *
      * @param zlibraryIds zlibraryIds
      */
-    void batchInsertBookOptimizLog(@Param("zlibraryIds") List<Integer> zlibraryIds);
+    void batchInsertBookOptimizeLog(@Param("zlibraryIds") List<Integer> zlibraryIds);
 }
