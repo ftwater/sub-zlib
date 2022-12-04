@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/zlib?useCursorFetch=true
+    username: root
+    password: root
+
+logging:
+  config: classpath:logback.xml
+
+sub-zlib:
+  basePath: /Users/zhaoyanpeng/workspace/sub-zlib/zlib
+  deleteJudges:
+    - com.zhaoyanpeng.subzlib.strategy.RemainBookByLanguageStrategy
+server:
+  shutdown: graceful
