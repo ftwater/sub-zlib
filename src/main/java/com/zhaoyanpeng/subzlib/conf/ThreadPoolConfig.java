@@ -18,23 +18,22 @@ import java.util.concurrent.ThreadPoolExecutor;
 @EnableAsync
 public class ThreadPoolConfig {
 
-    @Bean("LanguageProcessPool")
+    @Bean("languageProcessPool")
     public Executor languageProcessPool() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         // 核心线程数5：线程池创建时候初始化的线程数
-        executor.setCorePoolSize(5);
+        executor.setCorePoolSize(3);
         // 最大线程数5：线程池最大的线程数，只有在缓冲队列满了之后才会申请超过核心线程数的线程
-        executor.setMaxPoolSize(10);
+        executor.setMaxPoolSize(5);
         // 缓冲队列500：用来缓冲执行任务的队列
-        executor.setQueueCapacity(500);
+        executor.setQueueCapacity(20);
         // 允许线程的空闲时间60秒：当超过了核心线程出之外的线程在空闲时间到达之后会被销毁
         executor.setKeepAliveSeconds(60);
         // 线程池名的前缀：设置好了之后可以方便我们定位处理任务所在的线程池
         executor.setThreadNamePrefix("LanguageProcessThread-");
         // 设置拒绝策略. 替换默认线程池,线程队列满了以后交给调用者执行,也就是同步执行 共四种策略
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        // 等待所有任务结束后再关闭线程池
-        executor.setWaitForTasksToCompleteOnShutdown(true);
+        // 查询线程池不需要等待完成，应该立即中断
         executor.initialize();
         return executor;
     }

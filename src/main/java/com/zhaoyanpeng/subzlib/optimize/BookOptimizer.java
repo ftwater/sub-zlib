@@ -33,12 +33,16 @@ public class BookOptimizer {
         this.bookMapper = bookMapper;
     }
 
-    @Async("LanguageProcessPool")
-    public void optimizeBookByLanguage(CountDownLatch countDownLatch, Map<String, OptimizCountModel> optimizMap,
+    @Async("languageProcessPool")
+    public void optimizeBookByLanguage(Map<String, OptimizCountModel> optimizMap,
                                        String baseDir, String language)
             throws IOException {
         log.info("{}开始优化", language);
         bookMapper.listBookByLanguage(language, resultContext -> {
+            if (Thread.currentThread().isInterrupted()) {
+                log.info("{}中断优化", language);
+                resultContext.stop();
+            }
             if (resultContext.getResultCount() == 0) {
                 log.info("{}语言下不存在需要优化的书籍了", language);
                 return;
@@ -51,7 +55,6 @@ public class BookOptimizer {
                 log.error("bookId={},删除失败", book.getZlibraryId());
             }
         });
-        countDownLatch.countDown();
         log.info("{}优化结束", language);
     }
 

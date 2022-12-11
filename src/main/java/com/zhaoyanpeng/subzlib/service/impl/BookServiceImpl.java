@@ -4,15 +4,18 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaoyanpeng.subzlib.conf.GlobalContext;
 import com.zhaoyanpeng.subzlib.entity.Book;
 import com.zhaoyanpeng.subzlib.exception.DeleteBookFailException;
-import com.zhaoyanpeng.subzlib.exception.DeleteJudgeException;
+import com.zhaoyanpeng.subzlib.exception.DeleteJudgeConfigException;
+import com.zhaoyanpeng.subzlib.exception.NoPilimiTorrentException;
 import com.zhaoyanpeng.subzlib.mapper.BookMapper;
 import com.zhaoyanpeng.subzlib.model.OptimizCountModel;
 import com.zhaoyanpeng.subzlib.service.IBookService;
 import com.zhaoyanpeng.subzlib.optimize.IShouldBookNeedToBeDelete;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
@@ -51,12 +54,12 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements IB
                 deleteJudges.add(deleteJudge);
             } catch (Exception e) {
                 log.error("实例化deleteJudege实现失败", e);
-                throw new DeleteJudgeException("实例化deleteJudege实现失败:" + deleteJudgeName);
+                throw new DeleteJudgeConfigException("实例化deleteJudege实现失败:" + deleteJudgeName);
             }
 
         }
         if (deleteJudges.isEmpty()) {
-            throw new DeleteJudgeException("请配置sub-zlib.deleteJudges配置项目");
+            throw new DeleteJudgeConfigException("请配置sub-zlib.deleteJudges配置项目");
         }
     }
 
@@ -69,21 +72,31 @@ public class BookServiceImpl extends ServiceImpl<BookMapper, Book> implements IB
     public void deleteBook(String baseDir, Book book, Map<String, OptimizCountModel> optimizedMap)
             throws IOException {
         if (needToBeDelete(book)) {
-            String filePath =
-                    baseDir + File.separator +
-                            book.getPilimiTorrent().replace(".torrent", "") + File.separator +
-                            book.getZlibraryId();
+            String filePath = null;
             try {
+                filePath = getFilePath(baseDir, book);
                 Files.delete(Paths.get(filePath));
             } catch (NoSuchFileException e1) {
                 log.info("{} 文件不存在", filePath);
             } catch (DirectoryNotEmptyException e2) {
                 log.error("{} 目录不为空", filePath);
                 throw new DeleteBookFailException(e2);
+            } catch (NoPilimiTorrentException e) {
+                log.error(e.getMessage());
             }
             optimizedMap.get(book.getLanguage()).addOptimizedZlibraryIdsForSave(book.getZlibraryId());
             log.trace("{} 删除成功", book.getZlibraryId());
         }
+    }
+
+    @NotNull
+    private static String getFilePath(String baseDir, Book book) throws NoPilimiTorrentException {
+        if (!StringUtils.hasLength(book.getPilimiTorrent())) {
+            throw new NoPilimiTorrentException("该书籍没有torrent分类信息");
+        }
+        return baseDir + File.separator +
+                book.getPilimiTorrent().replace(".torrent", "") + File.separator +
+                book.getZlibraryId();
     }
 
     @Override

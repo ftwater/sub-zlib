@@ -3,10 +3,11 @@ package com.zhaoyanpeng.subzlib.optimize;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.zhaoyanpeng.subzlib.conf.GlobalContext;
 import com.zhaoyanpeng.subzlib.entity.Book;
-import com.zhaoyanpeng.subzlib.exception.SubZlibError;
+import com.zhaoyanpeng.subzlib.exception.BookOptimizeError;
 import com.zhaoyanpeng.subzlib.model.OptimizCountModel;
 import com.zhaoyanpeng.subzlib.service.IBookService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -28,7 +29,7 @@ import java.util.stream.Collectors;
  */
 @Component
 @Slf4j
-public class BookOptimizeScheduler implements ApplicationRunner {
+public class BookOptimizeScheduler implements ApplicationRunner, DisposableBean {
 
     private final BookOptimizer bookOptimizer;
 
@@ -40,10 +41,13 @@ public class BookOptimizeScheduler implements ApplicationRunner {
 
     private final Map<String, OptimizCountModel> optimizMap = new HashMap<>();
 
-    private final Timer timer = new Timer();
+    private final Timer monitorTimer = new Timer();
+
+    private final Timer scheduler = new Timer();
 
     private static final long ONE_HOUR = 1000L * 60 * 60;
-    private static final long TEN_SECONDS = 1000L * 10;
+    private static final long ONE_SECONDS = 1000L;
+    private static final long TEN_SECONDS = 10000L;
 
 
     public BookOptimizeScheduler(BookOptimizer bookOptimizer, IBookService bookService) {
@@ -51,13 +55,12 @@ public class BookOptimizeScheduler implements ApplicationRunner {
         this.bookService = bookService;
         baseDir = new File(GlobalContext.getInstance().getBasePath());
         if (!baseDir.exists()) {
-            throw new SubZlibError("basePath" + GlobalContext.getInstance().getBasePath() + " 未指定或不存在");
+            throw new BookOptimizeError("basePath" + GlobalContext.getInstance().getBasePath() + " 未指定或不存在");
         }
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        Timer scheduler = new Timer();
         scheduler.schedule(new TimerTask() {
             @Override
             public void run() {
@@ -68,11 +71,17 @@ public class BookOptimizeScheduler implements ApplicationRunner {
                     Thread.currentThread().interrupt();
                 }
             }
-        }, 10000L, ONE_HOUR);
+        }, TEN_SECONDS, ONE_HOUR);
     }
 
     private void doOptimize() throws InterruptedException {
         log.info("优化开始");
+        int tryTimes = 0;
+        // 重试3次，如果有任务在执行就不再执行
+        while (tryTimes < 3 && optimizing) {
+            Thread.sleep(ONE_SECONDS);
+            tryTimes++;
+        }
         if (optimizing) {
             log.info("当前存在优化任务，不需要执行。");
             return;
@@ -84,17 +93,13 @@ public class BookOptimizeScheduler implements ApplicationRunner {
         Set<String> languages =
                 bookService.list(new QueryWrapper<Book>().select("distinct language")).stream().map(Book::getLanguage)
                         .collect(Collectors.toSet());
-        CountDownLatch countDownLatch = new CountDownLatch(languages.size());
         for (String language : languages) {
             try {
-                bookOptimizer.optimizeBookByLanguage(countDownLatch, optimizMap, baseDir.getCanonicalPath(), language);
+                bookOptimizer.optimizeBookByLanguage(optimizMap, baseDir.getCanonicalPath(), language);
             } catch (IOException e) {
                 log.error("language={}，删除书籍异常", language);
             }
         }
-        countDownLatch.await();
-        optimizing = false;
-        stopMonitor();
         log.info("优化结束");
     }
 
@@ -102,9 +107,15 @@ public class BookOptimizeScheduler implements ApplicationRunner {
         TimerTask timerTask = new TimerTask() {
             final long allBookCount = optimizMap.values().stream()
                     .mapToLong(OptimizCountModel::getLanguageCount).sum();
+            int execTimes = 0;
 
             @Override
             public void run() {
+                if (!optimizing) {
+                    monitorTimer.cancel();
+                    return;
+                }
+                execTimes++;
                 optimizMap.forEach(
                         (language, optimizCountModel) -> {
                             long waitToProcesseCount =
@@ -124,28 +135,47 @@ public class BookOptimizeScheduler implements ApplicationRunner {
                 BigDecimal percent = BigDecimal.valueOf(processedCount)
                         .divide(BigDecimal.valueOf(allBookCount), 8,
                                 RoundingMode.CEILING);
-                log.info("总体共{}条记录，已优化{}条记录，优化进度：{}%", allBookCount,
-                        processedCount,
-                        percent.floatValue() * 100);
+                // 一分钟打印一次，或者全部优化结束打印出来
+                if (execTimes % 60 == 0 || processedCount >= allBookCount) {
+                    log.info("总体共{}条记录，已优化{}条记录，优化进度：{}%", allBookCount,
+                            processedCount,
+                            percent.floatValue() * 100);
+                }
                 // 保存优化记录，优化结束 或者 每500条记录保存一次
-                optimizMap.values().forEach(optimizCountModel -> {
-                    if (optimizCountModel.isOptimizeFinished() &&
-                            optimizCountModel.getOptimizedZlibraryIds().isEmpty()) {
-                        return;
-                    }
-                    if (optimizCountModel.isOptimizeFinished() ||
-                            optimizCountModel.getOptimizedZlibraryIds().size() >= 500) {
-                        List<Integer> zlibraryIdsForSave = optimizCountModel.clearOptimizedZlibraryIdsForSave();
-                        bookService.saveBookOptimizeLog(zlibraryIdsForSave);
-                    }
-                });
+                saveBookOptmizeLog(false);
+                // 所有语言都处理完了，变更状态
+                if (optimizMap.values().stream().filter(OptimizCountModel::isOptimizeFinished).count() ==
+                        optimizMap.size()) {
+                    optimizing = false;
+                }
             }
         };
-        timer.schedule(timerTask, 1000L, TEN_SECONDS);
+        monitorTimer.schedule(timerTask, ONE_SECONDS, ONE_SECONDS);
     }
 
-    private void stopMonitor() {
-        timer.cancel();
+    private void saveBookOptmizeLog(boolean isDestroy) {
+        optimizMap.values().forEach(optimizCountModel -> {
+            if (isDestroy) {
+                List<Integer> zlibraryIdsForSave = optimizCountModel.clearOptimizedZlibraryIdsForSave();
+                bookService.saveBookOptimizeLog(zlibraryIdsForSave);
+            } else {
+                if (optimizCountModel.isOptimizeFinished() &&
+                        optimizCountModel.getOptimizedZlibraryIds().isEmpty()) {
+                    return;
+                }
+                if (optimizCountModel.isOptimizeFinished() ||
+                        optimizCountModel.getOptimizedZlibraryIds().size() >= 500) {
+                    List<Integer> zlibraryIdsForSave = optimizCountModel.clearOptimizedZlibraryIdsForSave();
+                    bookService.saveBookOptimizeLog(zlibraryIdsForSave);
+                }
+            }
+        });
     }
 
+    @Override
+    public void destroy() {
+        scheduler.cancel();
+        monitorTimer.cancel();
+        saveBookOptmizeLog(true);
+    }
 }

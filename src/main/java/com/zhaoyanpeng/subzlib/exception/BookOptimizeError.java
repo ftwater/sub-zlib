@@ -6,8 +6,8 @@ package com.zhaoyanpeng.subzlib.exception;
  * @author zhaoyanpeng
  * @date 2022/12/2 12:31
  */
-public class SubZlibError extends RuntimeException {
-    public SubZlibError(String message) {
+public class BookOptimizeError extends RuntimeException {
+    public BookOptimizeError(String message) {
         super(message);
     }
 }

@@ -6,8 +6,8 @@ package com.zhaoyanpeng.subzlib.exception;
  * @author zhaoyanpeng
  * @date 2022/12/4 17:12
  */
-public class DeleteJudgeException extends RuntimeException{
-    public DeleteJudgeException(String message) {
+public class DeleteJudgeConfigException extends RuntimeException{
+    public DeleteJudgeConfigException(String message) {
         super(message);
     }
 }
